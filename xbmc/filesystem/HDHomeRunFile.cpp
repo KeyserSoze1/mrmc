@@ -52,11 +52,12 @@ bool CHomeRunFile::Exists(const CURL& url)
   std::string path(url.GetFileName());
 
   /*
-   * HDHomeRun URLs are of the form hdhomerun://1014F6D1/tuner0?channel=qam:108&program=10
+   * HDHomeRun URLs are of the form hdhomerun://1014F6D1/tuner0?channel=qam:108&program=10 or
+   * hdhomerun://1014F6D1/ch689000000-4
    * The filename starts with "tuner" and has no extension. This check will cover off requests
    * for *.tbn, *.jpg, *.jpeg, *.edl etc. that do not exist.
    */
-  return StringUtils::StartsWith(path, "tuner") &&
+  return (StringUtils::StartsWith(path, "tuner") || StringUtils::StartsWith(path, "ch")) &&
         !URIUtils::HasExtension(path);
 }
 
@@ -90,13 +91,36 @@ bool CHomeRunFile::Open(const CURL &url)
   if(!m_device)
     return false;
 
-  m_pdll->device_set_tuner_from_str(m_device, url.GetFileName().c_str());
+  // see which format the url is in
+  if (StringUtils::StartsWith(url.GetFileName(), "tuner"))
+  {
+    m_pdll->device_set_tuner_from_str(m_device, url.GetFileName().c_str());
 
-  if(url.HasOption("channel"))
-    m_pdll->device_set_tuner_channel(m_device, url.GetOption("channel").c_str());
+    if (m_pdll->device_tuner_lockkey_request(m_device) != 1)
+      return false;
 
-  if(url.HasOption("program"))
-    m_pdll->device_set_tuner_program(m_device, url.GetOption("program").c_str());
+    if(url.HasOption("channel"))
+      m_pdll->device_set_tuner_channel(m_device, url.GetOption("channel").c_str());
+
+    if(url.HasOption("program"))
+      m_pdll->device_set_tuner_program(m_device, url.GetOption("program").c_str());
+  }
+  else
+  {
+    if (m_pdll->device_tuner_lockkey_request(m_device) != 1)
+    {
+      m_pdll->device_set_tuner(m_device, 1);
+      if (m_pdll->device_tuner_lockkey_request(m_device) != 1)
+        return false;
+    }
+
+    std::string freqProg = StringUtils.TrimLeft(url.GetFileName(), "ch");
+    std::vector<std::string> channelValues = StringUtils.Split(freqProg, '-');
+    if (channelValues.size() > 0)
+      m_pdll->device_set_tuner_channel(m_device, channelValues[0].c_str());
+    if (channelValues.size() > 1)
+      m_pdll->device_set_tuner_program(m_device, channelValues[1].c_str());
+  }
 
   // start streaming from selected device and tuner
   if( m_pdll->device_stream_start(m_device) <= 0 )
@@ -143,6 +167,7 @@ void CHomeRunFile::Close()
   if(m_device)
   {
     m_pdll->device_stream_stop(m_device);
+    m_pdll->device_tuner_lockkey_release(m_device);
     m_pdll->device_destroy(m_device);
     m_device = NULL;
   }

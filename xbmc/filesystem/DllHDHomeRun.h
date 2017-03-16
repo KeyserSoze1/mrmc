@@ -50,6 +50,10 @@ public:
     { return ::hdhomerun_device_set_tuner(hd, tuner); }
   virtual int           device_get_tuner_status(struct hdhomerun_device_t *hd, char **pstatus_str, struct hdhomerun_tuner_status_t *status)
     { return ::hdhomerun_device_get_tuner_status(hd, pstatus_str, status); }
+  virtual int 		device_tuner_lockkey_request(struct hdhomerun_device_t *hd)
+    { return ::hdhomerun_device_tuner_lockkey_request(hd, NULL); }
+  virtual int 		device_tuner_lockkey_release(struct hdhomerun_device_t *hd)
+    { return ::hdhomerun_device_tuner_lockkey_release(hd); }
 };
 
 class DllHdHomeRun : public DllHdHomeRunInterface
